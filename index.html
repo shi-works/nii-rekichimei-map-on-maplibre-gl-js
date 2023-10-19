@@ -1,0 +1,388 @@
+<html>
+
+<head>
+    <title>歴史的地名マップ</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src='https://unpkg.com/maplibre-gl@3.1.0/dist/maplibre-gl.js'></script>
+    <link href='https://unpkg.com/maplibre-gl@3.1.0/dist/maplibre-gl.css' rel='stylesheet' />
+    <script src="https://unpkg.com/pmtiles@2.10.0/dist/index.js"></script>
+    <script type="module" src="maplibre-gl-gsi-terrain-fast-png.js"></script>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        .map-overlay {
+            font: bold 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            position: absolute;
+            width: 220px;
+            bottom: 20px;
+            left: 0;
+            padding: 10px;
+        }
+
+        .map-overlay .map-overlay-inner {
+            background-color: #fff;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .map-overlay label {
+            display: block;
+            margin: 0 0 0px;
+            font-size: 12px;
+            top: 100px;
+            left: 10px;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .map-overlay input {
+            background-color: transparent;
+            display: inline-block;
+            width: 100%;
+            position: relative;
+            margin: 0;
+            cursor: ew-resize;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div class="map-overlay top">
+        <div class="map-overlay-inner">
+            <label>陰影起伏図 不透明度: <span id="inei-slider-opacity-value">50%</span></label>
+            <input id="inei-slider-opacity" type="range" min="0" max="100" step="1" value="50">
+        </div>
+    </div>
+    <script type="text/javascript">
+        // protocolの設定
+        let protocol = new pmtiles.Protocol();
+        maplibregl.addProtocol("pmtiles", protocol.tile);
+
+        // マップの初期化
+        const map = new maplibregl.Map({
+            container: 'map',
+            // style: 'std.json',
+            style: 'https://tile2.openstreetmap.jp/styles/osm-bright-ja/style.json',
+            zoom: 14.01,
+            minZoom: 1,
+            maxZoom: 23,
+            pitch: 0,
+            bearing: 0,
+            center: [139.48387, 35.91565],
+            hash: true,
+            attributionControl: false
+        });
+
+        // ズーム・回転
+        map.addControl(new maplibregl.NavigationControl());
+
+        // フルスクリーンモードのオンオフ
+        map.addControl(new maplibregl.FullscreenControl());
+
+        // 現在位置表示
+        map.addControl(new maplibregl.GeolocateControl({
+            positionOptions: {
+                enableHighAccuracy: false
+            },
+            fitBoundsOptions: { maxZoom: 18 },
+            trackUserLocation: true,
+            showUserLocation: true
+        }));
+
+        // スケール表示
+        map.addControl(new maplibregl.ScaleControl({
+            maxWidth: 200,
+            unit: 'metric'
+        }));
+
+        // Attributionを折りたたみ表示
+        map.addControl(new maplibregl.AttributionControl({
+            compact: true,
+            customAttribution: '（<a href="https://twitter.com/shi__works" target="_blank">Twitter</a> | <a href="https://github.com/shi-works/nii-rekichime-map-on-maplibre-gl-js" target="_blank">Github</a>） '
+        }));
+
+        // 3D地形コントロール
+        map.addControl(
+            new maplibregl.TerrainControl({
+                source: 'gsidem',
+                exaggeration: 1 // 標高を強調する倍率
+            })
+        );
+
+        map.on('load', () => {
+            // 標高タイルソース
+            map.addSource("gsidem", {
+                type: 'raster-dem',
+                tiles: [
+                    'gsidem://https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png',
+                ],
+                attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html#dem" target="_blank">地理院タイル(標高タイル)</a>',
+                tileSize: 256
+            });
+
+            // map.setTerrain({ 'source': 'gsidem', 'exaggeration': 1 });
+
+            // 陰影起伏図ソース
+            map.addSource("hillshade", {
+                type: 'raster',
+                tiles: [
+                    'https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png',
+                ],
+                attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html#hillshademap" target="_blank">地理院タイル(陰影起伏図)</a>',
+                tileSize: 256
+            });
+
+            // 陰影起伏図レイヤ
+            map.addLayer({
+                id: 'hillshade-tiles',
+                type: 'raster',
+                source: 'hillshade',
+                minzoom: 2,
+                maxzoom: 18,
+                paint: {
+                    'raster-opacity': 0.5
+                }
+            });
+
+            // スライダーで陰影起伏図の不透明度を制御
+            const inei_sliderOpactiy = document.getElementById('inei-slider-opacity');
+            const inei_sliderOpactiyValue = document.getElementById('inei-slider-opacity-value');
+
+            inei_sliderOpactiy.addEventListener('input', (e) => {
+                map.setPaintProperty(
+                    'hillshade-tiles',
+                    'raster-opacity',
+                    parseInt(e.target.value, 10) / 100
+                );
+                inei_sliderOpactiyValue.textContent = e.target.value + '%';
+            });
+
+            // 役場ソース
+            map.addSource('town-hall', {
+                'type': 'geojson',
+                'data': './P05-22_01_47_town_hall_add_cityname.geojson',
+                attribution: '<a href="https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-P05-v3_0.html">国土数値情報 市町村役場（令和4年度）</a>'
+            });
+
+            // 役場ポイントレイヤ
+            // 外側の黒い円
+            map.addLayer({
+                'id': 'town-hall-points-outer-1',
+                'type': 'circle',
+                'source': 'town-hall',
+                'minzoom': 8,
+                'maxzoom': 12,
+                'paint': {
+                    'circle-color': 'rgba(0, 0, 0, 1)',
+                    'circle-radius': 5.5,
+                    'circle-blur': 0,
+                    'circle-opacity': 1
+                }
+            });
+
+            // 内側の白い円
+            map.addLayer({
+                'id': 'town-hall-points-inner-1',
+                'type': 'circle',
+                'source': 'town-hall',
+                'minzoom': 8,
+                'maxzoom': 12,
+                'paint': {
+                    'circle-color': 'rgba(255, 255, 255, 1)',
+                    'circle-radius': 4,
+                    'circle-blur': 0,
+                    'circle-opacity': 1
+                }
+            });
+
+            // 外側の黒い円
+            map.addLayer({
+                'id': 'town-hall-points-outer-2',
+                'type': 'circle',
+                'source': 'town-hall',
+                'minzoom': 8,
+                'maxzoom': 12,
+                'paint': {
+                    'circle-color': 'rgba(0, 0, 0, 1)',
+                    'circle-radius': 3,
+                    'circle-blur': 0,
+                    'circle-opacity': 1
+                }
+            });
+
+            // 内側の白い円
+            map.addLayer({
+                'id': 'town-hall-points-inner-2',
+                'type': 'circle',
+                'source': 'town-hall',
+                'minzoom': 8,
+                'maxzoom': 12,
+                'paint': {
+                    'circle-color': 'rgba(255, 255, 255, 1)',
+                    'circle-radius': 2.25,
+                    'circle-blur': 0,
+                    'circle-opacity': 1
+                }
+            });
+
+            // 役場ラベルレイヤ
+            map.addLayer({
+                'id': 'town-hall-labels-1',
+                'type': 'symbol',
+                'source': 'town-hall',
+                minzoom: 8,
+                maxzoom: 12,
+                'layout': {
+                    'text-field': ['get', 'city_name'],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    'text-size': 12,
+                    'text-anchor': 'center',
+                    'text-justify': 'center',
+                    'text-offset': [0, -1.0],
+                },
+                'paint': {
+                    'text-color': 'rgba(0, 0, 0, 1)',
+                    'text-halo-color': 'rgba(255, 255, 255, 1)',
+                    'text-halo-width': 1
+                }
+            });
+
+            // 役場ラベルレイヤ
+            map.addLayer({
+                'id': 'town-hall-labels-2',
+                'type': 'symbol',
+                'source': 'town-hall',
+                minzoom: 12,
+                maxzoom: 18,
+                'layout': {
+                    'text-field': ['get', 'city_name'],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    'text-size': 18,
+                    'text-anchor': 'center',
+                    'text-justify': 'center',
+                    'text-offset': [0, -1.0],
+                },
+                'paint': {
+                    'text-color': 'rgba(0, 0, 0, 1)',
+                    'text-halo-color': 'rgba(255, 255, 255, 1)',
+                    'text-halo-width': 2
+                }
+            });
+
+            // 歴史的地名ソース
+            map.addSource("pmtiles-rekichime", {
+                type: "vector",
+                url: "pmtiles://" + "https://xs489works.xsrv.jp/pmtiles-data/nii/rekichime/nrct-20231018.pmtiles",
+                attribution: '<a href="https://geoshape.ex.nii.ac.jp/nrct/">『日本歴史地名大系』地名項目データセット</a>'
+            });
+
+            // PNGソース追加
+            map.loadImage('./img/grn-circle.png',
+                function (error, image) {
+                    if (error) throw error;
+                    map.addImage('grn-circle', image);
+                }
+            );
+
+            // 歴史的地名シンボルレイヤ
+            map.addLayer({
+                'id': 'rekichime-symbol',
+                "type": "symbol",
+                'source': 'pmtiles-rekichime',
+                "source-layer": "nrct20231018",
+                minzoom: 10,
+                maxzoom: 23,
+                "layout": {
+                    "icon-image": 'grn-circle',
+                    "icon-size": [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        4, 0.05,  // ズームレベル4でサイズは0.05
+                        14, 0.4  // ズームレベル14でサイズは0.4
+                    ],
+                    "icon-allow-overlap": true // シンボルの重なりを許可
+                }
+            });
+
+            // 歴史的地名ラベルレイヤ
+            map.addLayer({
+                id: 'rekichime-label',
+                type: 'symbol',
+                'source': 'pmtiles-rekichime',
+                "source-layer": "nrct20231018",
+                minzoom: 13,
+                maxzoom: 23,
+                layout: {
+                    'text-field': ['get', '名称'],
+                    'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                    'text-size': 12,
+                    'text-offset': [0, 1.5],
+                    'text-allow-overlap': false,
+                    'text-ignore-placement': false,
+                    'text-max-width': 20  // テキストが折り返される前の最大幅を設定
+                },
+                paint: {
+                    'text-color': "rgba(0, 152, 0, 1)",
+                    'text-halo-blur': 1,
+                    'text-halo-color': 'rgba(255, 255, 255, 1)',
+                    'text-halo-width': 2
+                }
+            });
+
+            map.showTileBoundaries = false;
+
+        })
+
+        // 歴史的地名ポップアップ表示
+        map.on('click', 'rekichime-symbol', (e) => {
+            var lng = e.features[0].geometry.coordinates[0];
+            var lat = e.features[0].geometry.coordinates[1];
+            var id = e.features[0].properties['id'];
+            var pref_code = e.features[0].properties['都道府県コード'];
+            var name = e.features[0].properties['名称'];
+            var yomi = e.features[0].properties['読み'];
+            var jouichimei = e.features[0].properties['上位地名'];
+            var address = e.features[0].properties['出典住所'];
+            var suiteisyuhou = e.features[0].properties['推定手法'];
+            var rekichime_id = e.features[0].properties['歴史地名ID'];
+            var rekichime = e.features[0].properties['歴史地名'];
+            var geolod_id = e.features[0].properties['geolod_id'];
+
+            if (rekichime_id === undefined) { rekichime_id = "" };
+            if (rekichime === undefined) { rekichime = "" };
+            if (geolod_id === undefined) { geolod_id = "" };
+
+            new maplibregl.Popup()
+                .setLngLat(e.lngLat)
+                .setHTML(
+                    '<div style="border-bottom:1px solid #000;"><strong>名称: ' + name + '</strong></div>' +
+                    '<div style="border-bottom:1px solid #000;">読み: ' + yomi + '</div>' +
+                    '<div style="border-bottom:1px solid #000;">id: ' + id + '</div>' +
+                    '<div style="border-bottom:1px solid #000;">都道府県コード: ' + pref_code + '</div>' +
+                    '<div style="border-bottom:1px solid #000;">上位地名: ' + jouichimei + '</div>' +
+                    '<div style="border-bottom:1px solid #000;">出典住所: ' + address + '</div>' +
+                    '<div style="border-bottom:1px solid #000;">推定手法: ' + suiteisyuhou + '</div>' +
+                    '<div style="border-bottom:1px solid #000;">歴史地名ID: ' + rekichime_id + '</div>' +
+                    '<div style="border-bottom:1px solid #000;">歴史地名: ' + rekichime + '</div>' +
+                    '<div style="border-bottom:1px solid #000;">geolod_id: ' + geolod_id + '</div>' +
+                    '<div><a href="https://www.google.com/maps?q=' + lat + ',' + lng + '&hl=ja" target="_blank">🌎Google Maps</a></div>' +
+                    '<div><a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=' + lat + ',' + lng + '&hl=ja" target="_blank">📷Street View</a></div>'
+                )
+                .addTo(map);
+        });
+    </script>
+</body>
+
+</html>
