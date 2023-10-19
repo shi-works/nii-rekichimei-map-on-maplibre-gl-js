@@ -1,3 +1,3 @@
-# nii-rekichime-map-on-maplibre-gl-js
+# nii-rekichimei-map-on-maplibre-gl-js
 ## Data Source
 https://geoshape.ex.nii.ac.jp/nrct/
