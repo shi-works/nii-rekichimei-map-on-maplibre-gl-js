@@ -91,8 +91,8 @@
     <div id="map"></div>
     <div class="map-overlay top">
         <div class="map-overlay-inner">
-            <label>陰影起伏図 不透明度: <span id="inei-slider-opacity-value">50%</span></label>
-            <input id="inei-slider-opacity" type="range" min="0" max="100" step="1" value="50">
+            <label>陰影起伏図 不透明度: <span id="inei-slider-opacity-value">30%</span></label>
+            <input id="inei-slider-opacity" type="range" min="0" max="100" step="1" value="30">
         </div>
     </div>
     <div id='legend' class='legend'>
@@ -108,8 +108,8 @@
         // マップの初期化
         const map = new maplibregl.Map({
             container: 'map',
-            // style: 'std.json',
-            style: 'https://tile2.openstreetmap.jp/styles/osm-bright-ja/style.json',
+            style: './std.json',
+            // style: 'https://tile2.openstreetmap.jp/styles/osm-bright-ja/style.json',
             zoom: 14.01,
             minZoom: 1,
             maxZoom: 23,
@@ -187,7 +187,7 @@
                 minzoom: 2,
                 maxzoom: 18,
                 paint: {
-                    'raster-opacity': 0.5
+                    'raster-opacity': 0.3
                 }
             });
 
